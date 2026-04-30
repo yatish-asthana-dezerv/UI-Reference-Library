@@ -4,6 +4,81 @@
 
 'use strict';
 
+/* ── Password Gate ─────────────────────────────────────────────
+   HOW TO SET YOUR PASSWORD
+   ─────────────────────────────────────────────────────────────
+   1. Open any browser tab (can be any website or about:blank)
+   2. Open DevTools console  →  F12  or  Cmd+Option+J  (Mac)
+   3. Paste and run the command below, replacing MyPassword with
+      your chosen password (keep the quotes):
+
+      crypto.subtle.digest('SHA-256', new TextEncoder().encode('MyPassword'))
+        .then(b => console.log([...new Uint8Array(b)].map(x => x.toString(16).padStart(2,'0')).join('')))
+
+   4. Copy the 64-character hash that appears in the console
+   5. Replace the value of PASS_HASH below with your hash
+   6. Save the file and push to GitHub
+   ─────────────────────────────────────────────────────────── */
+
+const PASS_HASH = 'REPLACE_WITH_YOUR_64_CHAR_HASH_HERE';
+const SESSION_KEY = 'dezerv_ui_lib_auth';
+
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return [...new Uint8Array(buf)].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+
+async function initPasswordGate() {
+  /* Already authenticated in this tab session — skip the gate */
+  if (sessionStorage.getItem(SESSION_KEY) === '1') {
+    showApp();
+    return;
+  }
+
+  const gate   = document.getElementById('passwordGate');
+  const form   = document.getElementById('passwordForm');
+  const input  = document.getElementById('passwordInput');
+  const error  = document.getElementById('passwordError');
+  const btn    = document.getElementById('passwordSubmit');
+
+  /* Show the gate */
+  gate.style.display = 'flex';
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!input.value.trim()) return;
+
+    btn.disabled    = true;
+    btn.textContent = 'Checking…';
+    error.style.display = 'none';
+
+    const hash = await sha256(input.value);
+
+    if (hash === PASS_HASH) {
+      sessionStorage.setItem(SESSION_KEY, '1');
+      gate.style.display = 'none';
+      showApp();
+    } else {
+      error.style.display = 'block';
+      input.value = '';
+      input.focus();
+      btn.disabled    = false;
+      btn.textContent = 'Access Library';
+    }
+  });
+
+  /* Allow Enter key on the input */
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); form.requestSubmit(); }
+  });
+}
+
+function showApp() {
+  document.getElementById('appContent').style.display = 'block';
+}
+
+/* ──────────────────────────────────────────────────────────── */
+
 /* ── Category data ───────────────────────────────────────────
    Each category maps to a folder inside /Screens/.
    "folder" is the exact directory name (including spaces/special chars).
@@ -599,6 +674,7 @@ function bindEvents() {
 /* ── Init ────────────────────────────────────────────────── */
 
 document.addEventListener('DOMContentLoaded', () => {
+  initPasswordGate();   /* show gate first; showApp() reveals the rest */
   initDom();
   renderSidebar();
   renderGrid();
